@@ -3,6 +3,54 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { GoogleGenAI } from '@google/genai';
 
+// Request body type interfaces
+interface DetectTextBody {
+  image: string;
+}
+
+interface EnhancePromptBody {
+  prompt: string;
+}
+
+interface AnalyzeImageBody {
+  image: string;
+  context?: string;
+}
+
+interface GenerateThumbnailBody {
+  inspirationImage: string;
+  userImage: string;
+  prompt?: string;
+  textReplacement?: string;
+  textStyle?: {
+    font: string;
+    color: string;
+    effect: string;
+  };
+  aspectRatio?: string;
+  quality?: string;
+}
+
+interface GenerateFromPromptBody {
+  userImage: string;
+  prompt: string;
+  thumbnailText?: string;
+  textStyle?: {
+    font: string;
+    color: string;
+    effect: string;
+  };
+  aspectRatio?: string;
+  quality?: string;
+  style?: string;
+}
+
+interface GenerateVideoBody {
+  image: string;
+  prompt?: string;
+  aspectRatio?: string;
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -45,7 +93,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // Detect text in image
 app.post('/api/detect-text', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { image } = req.body;
+    const { image } = req.body as DetectTextBody;
     if (!image) {
       return res.status(400).json({ error: 'Image is required' });
     }
@@ -85,7 +133,7 @@ app.post('/api/detect-text', async (req: Request, res: Response, next: NextFunct
 // Enhance prompt
 app.post('/api/enhance-prompt', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { prompt } = req.body;
+    const { prompt } = req.body as EnhancePromptBody;
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
@@ -114,7 +162,7 @@ app.post('/api/enhance-prompt', async (req: Request, res: Response, next: NextFu
 // Analyze thumbnail
 app.post('/api/analyze', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { image } = req.body;
+    const { image } = req.body as DetectTextBody;
     if (!image) {
       return res.status(400).json({ error: 'Image is required' });
     }
@@ -167,7 +215,7 @@ app.post('/api/analyze', async (req: Request, res: Response, next: NextFunction)
 // Generate YouTube metadata
 app.post('/api/metadata', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { image, context } = req.body;
+    const { image, context } = req.body as AnalyzeImageBody;
     if (!image) {
       return res.status(400).json({ error: 'Image is required' });
     }
@@ -220,7 +268,7 @@ app.post('/api/metadata', async (req: Request, res: Response, next: NextFunction
 // Generate thumbnail
 app.post('/api/generate', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { inspirationImage, userImage, prompt, textReplacement, textStyle, aspectRatio, quality } = req.body;
+    const { inspirationImage, userImage, prompt, textReplacement, textStyle, aspectRatio, quality } = req.body as GenerateThumbnailBody;
 
     if (!inspirationImage || !userImage) {
       return res.status(400).json({ error: 'Both inspiration and user images are required' });
@@ -321,7 +369,7 @@ app.post('/api/generate', async (req: Request, res: Response, next: NextFunction
 // Generate thumbnail from prompt (no inspiration image needed)
 app.post('/api/generate-from-prompt', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { userImage, prompt, thumbnailText, textStyle, aspectRatio, quality, style } = req.body;
+    const { userImage, prompt, thumbnailText, textStyle, aspectRatio, quality, style } = req.body as GenerateFromPromptBody;
 
     if (!userImage) {
       return res.status(400).json({ error: 'User image is required' });
@@ -457,7 +505,7 @@ app.post('/api/generate-from-prompt', async (req: Request, res: Response, next: 
 // Generate video from thumbnail
 app.post('/api/generate-video', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { image, prompt, aspectRatio } = req.body;
+    const { image, prompt, aspectRatio } = req.body as GenerateVideoBody;
     if (!image) {
       return res.status(400).json({ error: 'Image is required' });
     }

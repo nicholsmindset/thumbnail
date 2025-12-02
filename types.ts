@@ -1,3 +1,10 @@
+// Import types for use in this file
+import type {
+  PlanType as PlanTypeImport,
+  QualityLevel as QualityLevelImport,
+  ThumbnailStyle as ThumbnailStyleImport,
+} from './constants';
+
 // Re-export constants for backwards compatibility
 export {
   CREDIT_COSTS,
@@ -8,6 +15,11 @@ export {
   type ThumbnailStyle,
   type ThumbnailStyleConfig,
 } from './constants';
+
+// Local type aliases for use within this file
+type QualityLevel = QualityLevelImport;
+type ThumbnailStyle = ThumbnailStyleImport;
+type PlanType = PlanTypeImport;
 
 export interface FileWithPreview {
   file: File;

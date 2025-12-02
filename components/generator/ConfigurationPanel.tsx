@@ -121,7 +121,7 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
           </label>
           <div className="flex flex-wrap gap-3">
             {(['standard', 'high', 'ultra'] as QualityLevel[]).map((q) => {
-              let cost = CREDIT_COSTS.THUMBNAIL_STANDARD;
+              let cost: number = CREDIT_COSTS.THUMBNAIL_STANDARD;
               if (q === 'high') cost = CREDIT_COSTS.THUMBNAIL_HIGH;
               if (q === 'ultra') cost = CREDIT_COSTS.THUMBNAIL_ULTRA;
 
