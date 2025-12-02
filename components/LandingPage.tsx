@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { Check, ArrowRight, Zap, TrendingUp, Sparkles, X, ChevronDown, ChevronUp, Clock, Youtube, Video, Eye, ShieldCheck, BarChart2, MousePointer2 } from 'lucide-react';
+import { Check, ArrowRight, Zap, TrendingUp, Sparkles, X, ChevronDown, ChevronUp, Clock, Youtube, Video, Eye, ShieldCheck, BarChart2, MousePointer2, Loader2 } from 'lucide-react';
 import { CREDIT_COSTS } from '../types';
+import { redirectToCheckout } from '../services/stripeService';
 
 interface LandingPageProps {
   onStart: () => void;
@@ -9,6 +10,17 @@ interface LandingPageProps {
 
 const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState<string | null>(null);
+
+  const handleSubscribe = async (planId: 'creator' | 'agency') => {
+    setIsLoading(planId);
+    try {
+      await redirectToCheckout(planId);
+    } catch (error) {
+      console.error('Checkout error:', error);
+      setIsLoading(null);
+    }
+  };
 
   const toggleFaq = (index: number) => {
     setFaqOpen(faqOpen === index ? null : index);
@@ -279,7 +291,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
                     <h3 className="text-xl font-bold text-white mb-2">Creator Plan</h3>
                     <div className="text-4xl font-black text-white mb-1">$19<span className="text-lg text-slate-500 font-normal">/mo</span></div>
                     <p className="text-xs text-indigo-300 mb-6 font-medium">Approx $0.19 per thumbnail</p>
-                    
+
                     <ul className="space-y-3 mb-8 text-sm text-slate-300">
                         <li className="flex gap-2"><Check size={16} className="text-green-400"/> 1,000 Credits / mo</li>
                         <li className="flex gap-2"><Check size={16} className="text-green-400"/> ~100 Thumbnails</li>
@@ -287,8 +299,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
                         <li className="flex gap-2"><Check size={16} className="text-green-400"/> Commercial License</li>
                         <li className="flex gap-2"><Check size={16} className="text-green-400"/> Video Beta Access</li>
                     </ul>
-                    <button onClick={onStart} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition-colors shadow-lg">
-                        Start Creating
+                    <button
+                        onClick={() => handleSubscribe('creator')}
+                        disabled={isLoading !== null}
+                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition-colors shadow-lg disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-2"
+                    >
+                        {isLoading === 'creator' ? (
+                            <>
+                                <Loader2 size={18} className="animate-spin" />
+                                Redirecting...
+                            </>
+                        ) : (
+                            'Start Creating'
+                        )}
                     </button>
                 </div>
 
@@ -302,8 +325,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
                         <li className="flex gap-2"><Check size={16} className="text-purple-500"/> Highest Speed Priority</li>
                         <li className="flex gap-2"><Check size={16} className="text-purple-500"/> Bulk Export</li>
                     </ul>
-                    <button onClick={onStart} className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg transition-colors">
-                        Scale Agency
+                    <button
+                        onClick={() => handleSubscribe('agency')}
+                        disabled={isLoading !== null}
+                        className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-2"
+                    >
+                        {isLoading === 'agency' ? (
+                            <>
+                                <Loader2 size={18} className="animate-spin" />
+                                Redirecting...
+                            </>
+                        ) : (
+                            'Scale Agency'
+                        )}
                     </button>
                 </div>
             </div>
