@@ -118,6 +118,7 @@ export const STORAGE_KEYS = {
   USER: 'thumbgen_user',
   HISTORY: 'thumbgen_history',
   TEMPLATES: 'thumbgen_templates',
+  SUBSCRIPTION: 'thumbgen_subscription',
 } as const;
 
 // UI Constants
@@ -125,6 +126,44 @@ export const UI = {
   MAX_HISTORY_ITEMS: 50,
   THUMBNAIL_PREVIEW_HEIGHT: '70vh',
 } as const;
+
+// Subscription Status
+export const SUBSCRIPTION_STATUS = {
+  ACTIVE: 'active',
+  CANCELLED: 'cancelled',
+  PAST_DUE: 'past_due',
+  TRIALING: 'trialing',
+} as const;
+
+export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUS)[keyof typeof SUBSCRIPTION_STATUS];
+
+// Subscription Details Interface
+export interface SubscriptionDetails {
+  status: SubscriptionStatus;
+  currentPlan: PlanType;
+  startDate: number; // timestamp
+  currentPeriodEnd: number; // timestamp
+  cancelAtPeriodEnd: boolean;
+  billingHistory: BillingHistoryItem[];
+}
+
+export interface BillingHistoryItem {
+  id: string;
+  date: number; // timestamp
+  amount: string;
+  description: string;
+  status: 'paid' | 'pending' | 'failed';
+}
+
+// Default subscription for new users
+export const DEFAULT_SUBSCRIPTION: SubscriptionDetails = {
+  status: 'trialing',
+  currentPlan: 'free',
+  startDate: Date.now(),
+  currentPeriodEnd: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days from now
+  cancelAtPeriodEnd: false,
+  billingHistory: [],
+};
 
 // API Configuration
 export const API_CONFIG = {
