@@ -1,0 +1,5 @@
+{
+  "name": "ThumbGen AI",
+  "description": "Create high-CTR YouTube thumbnails by cloning styles and inserting yourself using Gemini 3 Pro.",
+  "requestFramePermissions": []
+}
