@@ -5,6 +5,8 @@ export {
   type PlanType,
   type PlanDetails,
   type QualityLevel,
+  type ThumbnailStyle,
+  type ThumbnailStyleConfig,
 } from './constants';
 
 export interface FileWithPreview {
@@ -32,6 +34,10 @@ export interface ImageFilter {
   saturation: number;
 }
 
+// Generation modes
+export type GenerationMode = 'clone' | 'prompt';
+
+// Original style-cloning request (requires inspiration image)
 export interface ThumbnailRequest {
   inspirationImage: string; // Base64
   userImage: string; // Base64
@@ -41,6 +47,18 @@ export interface ThumbnailRequest {
   aspectRatio: string;
   quality: QualityLevel;
 }
+
+// New prompt-based generation request (no inspiration needed)
+export interface PromptThumbnailRequest {
+  userImage: string; // Base64 - the person's face
+  prompt: string; // Detailed description of the thumbnail
+  thumbnailText?: string; // Optional text to overlay on thumbnail
+  textStyle?: TextStyle;
+  aspectRatio: string;
+  quality: QualityLevel;
+  style?: ThumbnailStyle; // Pre-defined style options
+}
+
 
 export interface AnalysisResult {
   score: number; // 0-100

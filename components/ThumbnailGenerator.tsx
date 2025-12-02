@@ -4,8 +4,10 @@ import { Sparkles, Download, AlertCircle, RefreshCw, Wand2, Clock, Trash2, Type,
 import Header from './Header';
 import ImageUploader from './ImageUploader';
 import Dashboard from './Dashboard';
-import { FileWithPreview, GenerationStatus, HistoryItem, SavedTemplate, TextStyle, UserProfile, CREDIT_COSTS, PlanDetails, QualityLevel, ImageFilter } from '../types';
-import { checkApiKey, selectApiKey, generateThumbnail, generateVideoFromThumbnail, detectTextInImage, analyzeThumbnail, generateYoutubeMetadata, enhancePrompt } from '../services/geminiService';
+import GenerationModeSelector from './GenerationModeSelector';
+import StyleSelector from './StyleSelector';
+import { FileWithPreview, GenerationStatus, HistoryItem, SavedTemplate, TextStyle, UserProfile, CREDIT_COSTS, PlanDetails, QualityLevel, ImageFilter, GenerationMode, ThumbnailStyle } from '../types';
+import { checkApiKey, selectApiKey, generateThumbnail, generateThumbnailFromPrompt, generateVideoFromThumbnail, detectTextInImage, analyzeThumbnail, generateYoutubeMetadata, enhancePrompt } from '../services/geminiService';
 
 const DEFAULT_USER_PROFILE: UserProfile = {
   credits: 10, // Starts with exactly 1 free generation
@@ -24,11 +26,18 @@ const ThumbnailGenerator: React.FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_USER_PROFILE);
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
 
+  // Generation Mode
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('clone');
+
   const [inspirationImg, setInspirationImg] = useState<FileWithPreview | null>(null);
   const [userImg, setUserImg] = useState<FileWithPreview | null>(null);
   const [customPrompt, setCustomPrompt] = useState('');
   const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
   const [status, setStatus] = useState<GenerationStatus>(GenerationStatus.IDLE);
+
+  // Prompt Mode Options
+  const [thumbnailStyle, setThumbnailStyle] = useState<ThumbnailStyle>('dramatic');
+  const [thumbnailText, setThumbnailText] = useState('');
   
   // Aspect Ratio & Quality
   const [aspectRatio, setAspectRatio] = useState('16:9');
@@ -239,9 +248,22 @@ const ThumbnailGenerator: React.FC = () => {
       return;
     }
 
-    if (!inspirationImg || !userImg) {
-      setErrorMsg("Please upload both an inspiration thumbnail and your photo.");
-      return;
+    // Validation based on mode
+    if (generationMode === 'clone') {
+      if (!inspirationImg || !userImg) {
+        setErrorMsg("Please upload both an inspiration thumbnail and your photo.");
+        return;
+      }
+    } else {
+      // Prompt mode
+      if (!userImg) {
+        setErrorMsg("Please upload your photo.");
+        return;
+      }
+      if (!customPrompt.trim()) {
+        setErrorMsg("Please describe the thumbnail you want to create.");
+        return;
+      }
     }
 
     // Credit Check
@@ -253,23 +275,39 @@ const ThumbnailGenerator: React.FC = () => {
 
     setErrorMsg(null);
     setStatus(GenerationStatus.GENERATING);
-    
+
     try {
-      const generatedUrl = await generateThumbnail({
-        inspirationImage: inspirationImg.base64,
-        userImage: userImg.base64,
-        prompt: customPrompt,
-        textReplacement: textMode === 'change' ? replacementText : undefined,
-        textStyle: textMode === 'change' ? textStyle : undefined,
-        aspectRatio: aspectRatio,
-        quality: quality
-      });
+      let generatedUrl: string;
+
+      if (generationMode === 'clone') {
+        // Clone mode: use inspiration image
+        generatedUrl = await generateThumbnail({
+          inspirationImage: inspirationImg!.base64,
+          userImage: userImg!.base64,
+          prompt: customPrompt,
+          textReplacement: textMode === 'change' ? replacementText : undefined,
+          textStyle: textMode === 'change' ? textStyle : undefined,
+          aspectRatio: aspectRatio,
+          quality: quality
+        });
+      } else {
+        // Prompt mode: generate from scratch
+        generatedUrl = await generateThumbnailFromPrompt({
+          userImage: userImg!.base64,
+          prompt: customPrompt,
+          thumbnailText: thumbnailText || undefined,
+          textStyle: thumbnailText ? textStyle : undefined,
+          aspectRatio: aspectRatio,
+          quality: quality,
+          style: thumbnailStyle
+        });
+      }
 
       const newItem: HistoryItem = {
         id: Date.now().toString(),
         imageUrl: generatedUrl,
-        inspirationImage: inspirationImg.base64, // Store the source
-        prompt: customPrompt || "Style Copy",
+        inspirationImage: generationMode === 'clone' ? inspirationImg?.base64 : undefined,
+        prompt: customPrompt || (generationMode === 'clone' ? "Style Copy" : "Prompt Generation"),
         timestamp: Date.now(),
         aspectRatio: aspectRatio,
         quality: quality,
@@ -434,11 +472,21 @@ const ThumbnailGenerator: React.FC = () => {
       {/* Welcome / Intro Text */}
       <div className="text-center space-y-3">
             <h2 className="text-3xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-white to-purple-200">
-            Clone viral styles. Feature yourself.
+            {generationMode === 'clone' ? 'Clone viral styles. Feature yourself.' : 'Create thumbnails from your imagination.'}
             </h2>
             <p className="text-slate-400 max-w-2xl mx-auto">
-            Upload a reference thumbnail and a selfie. The AI replicates the lighting, text, and composition but swaps the identity with yours.
+            {generationMode === 'clone'
+              ? 'Upload a reference thumbnail and a selfie. The AI replicates the lighting, text, and composition but swaps the identity with yours.'
+              : 'Describe your perfect thumbnail and upload your photo. The AI will create it from scratch with your face.'}
             </p>
+      </div>
+
+      {/* Generation Mode Selector */}
+      <div className="max-w-md mx-auto">
+        <GenerationModeSelector
+          mode={generationMode}
+          onModeChange={setGenerationMode}
+        />
       </div>
 
       {/* API Key Banner */}
@@ -464,24 +512,46 @@ const ThumbnailGenerator: React.FC = () => {
       )}
 
       {/* Input Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <ImageUploader
-          id="insp-upload"
-          label="1. Inspiration Thumbnail"
-          description="Upload a thumbnail you want to copy the style/layout from."
-          image={inspirationImg}
-          onImageChange={setInspirationImg}
-          isLoading={isScanningText}
-        />
-        <ImageUploader
-          id="user-upload"
-          label="2. Your Face (Reference)"
-          description="Upload a high-quality close-up of your face. Good lighting and looking at the camera works best."
-          image={userImg}
-          onImageChange={setUserImg}
-          isLoading={false}
-        />
-      </div>
+      {generationMode === 'clone' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <ImageUploader
+            id="insp-upload"
+            label="1. Inspiration Thumbnail"
+            description="Upload a thumbnail you want to copy the style/layout from."
+            image={inspirationImg}
+            onImageChange={setInspirationImg}
+            isLoading={isScanningText}
+          />
+          <ImageUploader
+            id="user-upload"
+            label="2. Your Face (Reference)"
+            description="Upload a high-quality close-up of your face. Good lighting and looking at the camera works best."
+            image={userImg}
+            onImageChange={setUserImg}
+            isLoading={false}
+          />
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {/* User Photo Uploader for Prompt Mode */}
+          <div className="max-w-md mx-auto">
+            <ImageUploader
+              id="user-upload-prompt"
+              label="1. Your Face (Reference)"
+              description="Upload a high-quality close-up of your face. This is the only image needed."
+              image={userImg}
+              onImageChange={setUserImg}
+              isLoading={false}
+            />
+          </div>
+
+          {/* Style Selector for Prompt Mode */}
+          <StyleSelector
+            selectedStyle={thumbnailStyle}
+            onStyleChange={setThumbnailStyle}
+          />
+        </div>
+      )}
 
       {/* Configuration Section */}
       <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-sm space-y-8">
@@ -537,7 +607,8 @@ const ThumbnailGenerator: React.FC = () => {
           </div>
         </div>
 
-        {/* Text Options */}
+        {/* Text Options - Clone Mode Only */}
+        {generationMode === 'clone' && (
         <div className="border-t border-slate-700/50 pt-8">
           <label className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
             <Type size={16} className="text-indigo-400"/> 5. Text Options
@@ -551,7 +622,7 @@ const ThumbnailGenerator: React.FC = () => {
                 <input type="radio" className="hidden" checked={textMode === 'keep'} onChange={() => setTextMode('keep')} />
                 <span className={textMode === 'keep' ? 'text-white font-medium' : 'text-slate-400 group-hover:text-slate-300'}>Keep Original Text</span>
               </label>
-              
+
               <label className="flex items-center gap-3 cursor-pointer group select-none">
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${textMode === 'change' ? 'border-indigo-500 bg-indigo-500/20' : 'border-slate-500 group-hover:border-slate-400'}`}>
                   {textMode === 'change' && <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />}
@@ -561,7 +632,7 @@ const ThumbnailGenerator: React.FC = () => {
               </label>
 
               {/* Scan Button */}
-                <button 
+                <button
                   onClick={handleScanText}
                   disabled={isScanningText || !inspirationImg}
                   className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs text-indigo-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -570,7 +641,7 @@ const ThumbnailGenerator: React.FC = () => {
                   {isScanningText ? 'Scanning...' : 'Scan Image for Text'}
                 </button>
             </div>
-            
+
             {/* Detected Text Chips */}
             {detectedTexts.length > 0 && textMode === 'change' && (
               <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-1">
@@ -590,8 +661,8 @@ const ThumbnailGenerator: React.FC = () => {
             {textMode === 'change' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-200 p-4 bg-slate-900/50 rounded-xl border border-slate-700">
                 <div className="col-span-1 md:col-span-2 relative">
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={replacementText}
                     onChange={(e) => setReplacementText(e.target.value)}
                     placeholder="Enter the new text..."
@@ -599,11 +670,11 @@ const ThumbnailGenerator: React.FC = () => {
                   />
                   <Type size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                 </div>
-                
+
                 {/* Styling Options */}
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-400">Font</label>
-                  <select 
+                  <select
                     value={textStyle.font}
                     onChange={(e) => setTextStyle({...textStyle, font: e.target.value})}
                     className="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -618,7 +689,7 @@ const ThumbnailGenerator: React.FC = () => {
 
                   <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-400">Effect</label>
-                  <select 
+                  <select
                     value={textStyle.effect}
                     onChange={(e) => setTextStyle({...textStyle, effect: e.target.value})}
                     className="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -633,8 +704,8 @@ const ThumbnailGenerator: React.FC = () => {
                 <div className="flex flex-col gap-1">
                     <label className="text-xs text-slate-400">Color</label>
                     <div className="flex items-center gap-2">
-                      <input 
-                          type="color" 
+                      <input
+                          type="color"
                           value={textStyle.color}
                           onChange={(e) => setTextStyle({...textStyle, color: e.target.value})}
                           className="h-9 w-12 bg-transparent cursor-pointer rounded overflow-hidden border border-slate-600"
@@ -646,12 +717,37 @@ const ThumbnailGenerator: React.FC = () => {
             )}
           </div>
         </div>
+        )}
+
+        {/* Thumbnail Text - Prompt Mode Only */}
+        {generationMode === 'prompt' && (
+        <div className="border-t border-slate-700/50 pt-8">
+          <label className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <Type size={16} className="text-purple-400"/> 3. Thumbnail Text (Optional)
+          </label>
+          <div className="flex flex-col gap-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="e.g. 'HOW I MADE $1M' or 'YOU WON'T BELIEVE THIS'"
+                value={thumbnailText}
+                onChange={(e) => setThumbnailText(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 pl-10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+              />
+              <Type size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            </div>
+            <p className="text-xs text-slate-500">
+              Add text to overlay on your thumbnail. Leave empty for no text.
+            </p>
+          </div>
+        </div>
+        )}
 
         {/* Prompt & Templates */}
         <div className="border-t border-slate-700/50 pt-8">
             <div className="flex items-center justify-between mb-4">
               <label className="text-sm font-semibold text-slate-300 uppercase tracking-wider block">
-                  6. Context & Details (Optional)
+                  {generationMode === 'clone' ? '6. Context & Details (Optional)' : '4. Describe Your Thumbnail'}
               </label>
               
               {/* Templates Dropdown */}
@@ -677,7 +773,10 @@ const ThumbnailGenerator: React.FC = () => {
                   <div className="relative flex-1">
                     <input
                     type="text"
-                    placeholder="e.g. 'Make me look shocked' or 'Add fire in background'"
+                    placeholder={generationMode === 'clone'
+                      ? "e.g. 'Make me look shocked' or 'Add fire in background'"
+                      : "e.g. 'Me looking shocked at my phone with money raining, neon city background'"
+                    }
                     value={customPrompt}
                     onChange={(e) => setCustomPrompt(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 pr-10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
@@ -745,7 +844,7 @@ const ThumbnailGenerator: React.FC = () => {
                   </>
               ) : (
                   <>
-                  <Wand2 /> Generate Thumbnail ({getCurrentCost()} Credits)
+                  <Wand2 /> {generationMode === 'clone' ? 'Clone Thumbnail' : 'Create Thumbnail'} ({getCurrentCost()} Credits)
                   </>
               )}
               </button>

@@ -1,6 +1,7 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { ThumbnailRequest, QualityLevel, AnalysisResult, YoutubeMetadataResult } from "../types";
+import { ThumbnailRequest, PromptThumbnailRequest, QualityLevel, AnalysisResult, YoutubeMetadataResult } from "../types";
+import { getStyleConfig } from "../constants";
 
 // Helper to remove data URL prefix if present for the API call
 const cleanBase64 = (dataUrl: string) => {
@@ -333,6 +334,131 @@ export const generateThumbnail = async (request: ThumbnailRequest): Promise<stri
 
   } catch (error) {
     console.error("Gemini Generation Error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Generate a thumbnail from scratch using only a user's face image and a text prompt.
+ * No inspiration image is required - the AI creates the entire thumbnail based on the prompt.
+ */
+export const generateThumbnailFromPrompt = async (request: PromptThumbnailRequest): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const user = cleanBase64(request.userImage);
+
+  // Get style configuration
+  const styleConfig = request.style ? getStyleConfig(request.style) : null;
+  const styleModifier = styleConfig?.promptModifier || '';
+
+  // Build text overlay instructions
+  let textInstruction = '';
+  if (request.thumbnailText) {
+    const textStyleInfo = request.textStyle
+      ? `
+        - Font Style: ${request.textStyle.font}
+        - Text Color: ${request.textStyle.color}
+        - Text Effect: ${request.textStyle.effect}`
+      : '- Use bold, highly readable text with strong contrast';
+
+    textInstruction = `
+      TEXT OVERLAY - CRITICAL:
+      - Add this text prominently on the thumbnail: "${request.thumbnailText}"
+      ${textStyleInfo}
+      - Position the text for maximum impact and readability
+      - Ensure text does not obscure the subject's face
+      - Use YouTube thumbnail text conventions (large, bold, edge-positioned)
+    `;
+  }
+
+  const promptText = `
+    ROLE: Expert YouTube Thumbnail Designer & Digital Artist specializing in viral, high-CTR thumbnails.
+
+    TASK:
+    Create a professional, eye-catching YouTube thumbnail from scratch based on the user's description.
+
+    INPUT:
+    - IMAGE (Identity Reference): This is the person who should appear in the thumbnail.
+      Their face and identity MUST be preserved exactly.
+
+    CRITICAL INSTRUCTION - IDENTITY PRESERVATION:
+    - The face in the final thumbnail MUST be the person from the provided image.
+    - DO NOT create a new face. Preserve these exact features:
+      1. Eye shape and color from the reference image
+      2. Nose structure and proportions
+      3. Jawline and face shape
+      4. Mouth and lip shape
+      5. Any distinctive features (moles, skin texture, etc.)
+
+    THUMBNAIL DESCRIPTION:
+    ${request.prompt}
+
+    STYLE REQUIREMENTS:
+    ${styleModifier}
+    ${textInstruction}
+
+    COMPOSITION GUIDELINES:
+    - Create a visually striking composition that grabs attention
+    - Use the rule of thirds for subject placement
+    - Ensure high contrast and saturation for YouTube thumbnail visibility
+    - Include dynamic elements that suggest action or emotion
+    - Create depth with foreground/background separation
+    - The thumbnail should work at small sizes (YouTube browse view)
+
+    TECHNICAL QUALITY:
+    - Photorealistic, 8K resolution, highly detailed
+    - Professional studio-quality lighting
+    - Sharp focus on the subject
+    - Vibrant, YouTube-optimized color grading
+
+    OUTPUT: Generate ONLY the final thumbnail image.
+  `;
+
+  // Map quality to imageSize
+  const imageSizeMap: Record<QualityLevel, string> = {
+    'standard': '1K',
+    'high': '2K',
+    'ultra': '4K'
+  };
+
+  const imageSize = imageSizeMap[request.quality || 'standard'];
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-image-preview',
+      contents: {
+        parts: [
+          {
+            text: promptText,
+          },
+          {
+            inlineData: {
+              mimeType: user.mimeType,
+              data: user.data,
+            },
+          },
+        ],
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: request.aspectRatio || "16:9",
+          imageSize: imageSize,
+        },
+      },
+    });
+
+    // Extract image from response
+    if (response.candidates && response.candidates[0].content.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
+    }
+
+    throw new Error("No image generated.");
+
+  } catch (error) {
+    console.error("Gemini Prompt Generation Error:", error);
     throw error;
   }
 };

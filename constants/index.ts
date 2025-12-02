@@ -138,3 +138,78 @@ export const EFFECT_OPTIONS = ['None', 'Glow', 'Shadow', 'Outline', '3D'] as con
 
 export type FontOption = (typeof FONT_OPTIONS)[number];
 export type EffectOption = (typeof EFFECT_OPTIONS)[number];
+
+// Thumbnail Style Types
+export type ThumbnailStyle =
+  | 'dramatic'
+  | 'clean'
+  | 'energetic'
+  | 'mysterious'
+  | 'educational'
+  | 'reaction'
+  | 'custom';
+
+export interface ThumbnailStyleConfig {
+  id: ThumbnailStyle;
+  name: string;
+  description: string;
+  promptModifier: string;
+  previewColor: string;
+}
+
+// Thumbnail Style Configurations for Prompt-Based Generation
+export const THUMBNAIL_STYLES: ThumbnailStyleConfig[] = [
+  {
+    id: 'dramatic',
+    name: 'Dramatic',
+    description: 'High contrast with intense lighting and bold shadows',
+    promptModifier: 'dramatic cinematic lighting, high contrast, intense mood, rim lighting, deep shadows, professional studio lighting, movie poster quality',
+    previewColor: '#1a1a2e',
+  },
+  {
+    id: 'clean',
+    name: 'Clean',
+    description: 'Minimal, professional look with soft lighting',
+    promptModifier: 'clean professional look, soft diffused lighting, minimal background, corporate style, high-end portrait, neutral tones, studio photography',
+    previewColor: '#f8f9fa',
+  },
+  {
+    id: 'energetic',
+    name: 'Energetic',
+    description: 'Bright, vibrant colors with dynamic feel',
+    promptModifier: 'vibrant bright colors, dynamic energy, saturated tones, bold composition, eye-catching, pop art influence, energetic mood, high saturation',
+    previewColor: '#ff6b6b',
+  },
+  {
+    id: 'mysterious',
+    name: 'Mysterious',
+    description: 'Dark, moody atmosphere with intrigue',
+    promptModifier: 'dark moody atmosphere, mysterious ambiance, low-key lighting, shadows and silhouettes, noir style, enigmatic mood, subtle highlights',
+    previewColor: '#2d3436',
+  },
+  {
+    id: 'educational',
+    name: 'Educational',
+    description: 'Clear, informative layout with trust-building elements',
+    promptModifier: 'educational professional style, clear visibility, trustworthy appearance, informative layout, teacher-like authority, bright and clear lighting',
+    previewColor: '#0984e3',
+  },
+  {
+    id: 'reaction',
+    name: 'Reaction',
+    description: 'Expressive face focus with exaggerated emotions',
+    promptModifier: 'extreme close-up face, exaggerated expression, wide eyes, open mouth reaction, shocked expression, dramatic zoom, viral thumbnail style',
+    previewColor: '#fdcb6e',
+  },
+  {
+    id: 'custom',
+    name: 'Custom',
+    description: 'Fully custom style from your prompt',
+    promptModifier: '',
+    previewColor: '#6c5ce7',
+  },
+];
+
+export const getStyleConfig = (styleId: ThumbnailStyle): ThumbnailStyleConfig => {
+  return THUMBNAIL_STYLES.find((s) => s.id === styleId) || THUMBNAIL_STYLES[THUMBNAIL_STYLES.length - 1];
+};

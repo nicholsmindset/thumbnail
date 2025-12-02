@@ -318,6 +318,142 @@ app.post('/api/generate', async (req: Request, res: Response, next: NextFunction
   }
 });
 
+// Generate thumbnail from prompt (no inspiration image needed)
+app.post('/api/generate-from-prompt', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userImage, prompt, thumbnailText, textStyle, aspectRatio, quality, style } = req.body;
+
+    if (!userImage) {
+      return res.status(400).json({ error: 'User image is required' });
+    }
+
+    if (!prompt) {
+      return res.status(400).json({ error: 'Prompt is required' });
+    }
+
+    const user = cleanBase64(userImage);
+
+    // Style modifiers for different thumbnail styles
+    const styleModifiers: Record<string, string> = {
+      'dramatic': 'dramatic cinematic lighting, high contrast, intense mood, rim lighting, deep shadows, professional studio lighting, movie poster quality',
+      'clean': 'clean professional look, soft diffused lighting, minimal background, corporate style, high-end portrait, neutral tones, studio photography',
+      'energetic': 'vibrant bright colors, dynamic energy, saturated tones, bold composition, eye-catching, pop art influence, energetic mood, high saturation',
+      'mysterious': 'dark moody atmosphere, mysterious ambiance, low-key lighting, shadows and silhouettes, noir style, enigmatic mood, subtle highlights',
+      'educational': 'educational professional style, clear visibility, trustworthy appearance, informative layout, teacher-like authority, bright and clear lighting',
+      'reaction': 'extreme close-up face, exaggerated expression, wide eyes, open mouth reaction, shocked expression, dramatic zoom, viral thumbnail style',
+      'custom': '',
+    };
+
+    const styleModifier = style ? (styleModifiers[style] || '') : '';
+
+    // Build text overlay instructions
+    let textInstruction = '';
+    if (thumbnailText) {
+      const textStyleInfo = textStyle
+        ? `
+          - Font Style: ${textStyle.font}
+          - Text Color: ${textStyle.color}
+          - Text Effect: ${textStyle.effect}`
+        : '- Use bold, highly readable text with strong contrast';
+
+      textInstruction = `
+        TEXT OVERLAY - CRITICAL:
+        - Add this text prominently on the thumbnail: "${thumbnailText}"
+        ${textStyleInfo}
+        - Position the text for maximum impact and readability
+        - Ensure text does not obscure the subject's face
+        - Use YouTube thumbnail text conventions (large, bold, edge-positioned)
+      `;
+    }
+
+    const promptText = `
+      ROLE: Expert YouTube Thumbnail Designer & Digital Artist specializing in viral, high-CTR thumbnails.
+
+      TASK:
+      Create a professional, eye-catching YouTube thumbnail from scratch based on the user's description.
+
+      INPUT:
+      - IMAGE (Identity Reference): This is the person who should appear in the thumbnail.
+        Their face and identity MUST be preserved exactly.
+
+      CRITICAL INSTRUCTION - IDENTITY PRESERVATION:
+      - The face in the final thumbnail MUST be the person from the provided image.
+      - DO NOT create a new face. Preserve these exact features:
+        1. Eye shape and color from the reference image
+        2. Nose structure and proportions
+        3. Jawline and face shape
+        4. Mouth and lip shape
+        5. Any distinctive features (moles, skin texture, etc.)
+
+      THUMBNAIL DESCRIPTION:
+      ${prompt}
+
+      STYLE REQUIREMENTS:
+      ${styleModifier}
+      ${textInstruction}
+
+      COMPOSITION GUIDELINES:
+      - Create a visually striking composition that grabs attention
+      - Use the rule of thirds for subject placement
+      - Ensure high contrast and saturation for YouTube thumbnail visibility
+      - Include dynamic elements that suggest action or emotion
+      - Create depth with foreground/background separation
+      - The thumbnail should work at small sizes (YouTube browse view)
+
+      TECHNICAL QUALITY:
+      - Photorealistic, 8K resolution, highly detailed
+      - Professional studio-quality lighting
+      - Sharp focus on the subject
+      - Vibrant, YouTube-optimized color grading
+
+      OUTPUT: Generate ONLY the final thumbnail image.
+    `;
+
+    const imageSizeMap: Record<string, string> = {
+      'standard': '1K',
+      'high': '2K',
+      'ultra': '4K'
+    };
+
+    const imageSize = imageSizeMap[quality || 'standard'];
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-image-preview',
+      contents: {
+        parts: [
+          { text: promptText },
+          {
+            inlineData: {
+              mimeType: user.mimeType,
+              data: user.data,
+            },
+          },
+        ],
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: aspectRatio || "16:9",
+          imageSize: imageSize,
+        },
+      },
+    });
+
+    if (response.candidates && response.candidates[0].content.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          return res.json({
+            imageUrl: `data:image/png;base64,${part.inlineData.data}`
+          });
+        }
+      }
+    }
+
+    res.status(500).json({ error: 'No image generated' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Generate video from thumbnail
 app.post('/api/generate-video', async (req: Request, res: Response, next: NextFunction) => {
   try {
