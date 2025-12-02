@@ -2,15 +2,38 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { GoogleGenAI } from '@google/genai';
+import Stripe from 'stripe';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize Stripe
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+if (!stripeSecretKey) {
+  console.warn('STRIPE_SECRET_KEY not configured - Stripe features will be disabled');
+}
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
+
+// Stripe product configuration
+const STRIPE_PRODUCTS = {
+  creator: {
+    productId: process.env.STRIPE_CREATOR_PRODUCT_ID || 'prod_TWpQPE2VqDDpS4',
+    credits: 1000,
+  },
+  agency: {
+    productId: process.env.STRIPE_AGENCY_PRODUCT_ID || 'prod_TWpTYfXYByGs6q',
+    credits: 5000,
+  },
+};
 
 // Middleware
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
   credentials: true,
 }));
+
+// Special handling for Stripe webhooks - needs raw body
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '50mb' }));
 
 // Rate limiting
@@ -385,6 +408,263 @@ function cleanBase64(dataUrl: string) {
     data: dataUrl
   };
 }
+
+// ============================================
+// STRIPE ENDPOINTS
+// ============================================
+
+// Create checkout session
+app.post('/api/stripe/create-checkout-session', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json({ error: 'Stripe is not configured' });
+    }
+
+    const { planId, successUrl, cancelUrl } = req.body;
+
+    if (!planId || !['creator', 'agency'].includes(planId)) {
+      return res.status(400).json({ error: 'Invalid plan ID. Must be "creator" or "agency"' });
+    }
+
+    const productConfig = STRIPE_PRODUCTS[planId as keyof typeof STRIPE_PRODUCTS];
+
+    // Get the product from Stripe to find its default price
+    const product = await stripe.products.retrieve(productConfig.productId);
+
+    if (!product.default_price) {
+      return res.status(400).json({ error: 'Product does not have a default price configured in Stripe' });
+    }
+
+    const priceId = typeof product.default_price === 'string'
+      ? product.default_price
+      : product.default_price.id;
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: successUrl || `${process.env.CORS_ORIGIN || 'http://localhost:3000'}?success=true&plan=${planId}`,
+      cancel_url: cancelUrl || `${process.env.CORS_ORIGIN || 'http://localhost:3000'}?canceled=true`,
+      metadata: {
+        planId,
+        credits: productConfig.credits.toString(),
+      },
+    });
+
+    res.json({
+      sessionId: session.id,
+      url: session.url
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get subscription status by customer email or session ID
+app.post('/api/stripe/subscription-status', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json({ error: 'Stripe is not configured' });
+    }
+
+    const { sessionId, customerEmail } = req.body;
+
+    if (sessionId) {
+      // Get session and subscription details
+      const session = await stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ['subscription', 'customer'],
+      });
+
+      if (!session.subscription) {
+        return res.json({ status: 'no_subscription' });
+      }
+
+      const subscription = session.subscription as Stripe.Subscription;
+
+      return res.json({
+        status: subscription.status,
+        planId: session.metadata?.planId,
+        credits: parseInt(session.metadata?.credits || '0'),
+        currentPeriodEnd: subscription.current_period_end,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      });
+    }
+
+    if (customerEmail) {
+      // Find customer by email
+      const customers = await stripe.customers.list({ email: customerEmail, limit: 1 });
+
+      if (customers.data.length === 0) {
+        return res.json({ status: 'no_customer' });
+      }
+
+      const customer = customers.data[0];
+
+      // Get active subscriptions
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customer.id,
+        status: 'active',
+        limit: 1,
+      });
+
+      if (subscriptions.data.length === 0) {
+        return res.json({ status: 'no_subscription' });
+      }
+
+      const subscription = subscriptions.data[0];
+
+      // Determine plan from product
+      let planId = 'free';
+      let credits = 0;
+
+      const productId = subscription.items.data[0]?.price?.product;
+      if (productId === STRIPE_PRODUCTS.creator.productId) {
+        planId = 'creator';
+        credits = STRIPE_PRODUCTS.creator.credits;
+      } else if (productId === STRIPE_PRODUCTS.agency.productId) {
+        planId = 'agency';
+        credits = STRIPE_PRODUCTS.agency.credits;
+      }
+
+      return res.json({
+        status: subscription.status,
+        planId,
+        credits,
+        currentPeriodEnd: subscription.current_period_end,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      });
+    }
+
+    res.status(400).json({ error: 'Either sessionId or customerEmail is required' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Create customer portal session (for managing subscription)
+app.post('/api/stripe/create-portal-session', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json({ error: 'Stripe is not configured' });
+    }
+
+    const { customerEmail, returnUrl } = req.body;
+
+    if (!customerEmail) {
+      return res.status(400).json({ error: 'Customer email is required' });
+    }
+
+    // Find customer by email
+    const customers = await stripe.customers.list({ email: customerEmail, limit: 1 });
+
+    if (customers.data.length === 0) {
+      return res.status(404).json({ error: 'No customer found with this email' });
+    }
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customers.data[0].id,
+      return_url: returnUrl || process.env.CORS_ORIGIN || 'http://localhost:3000',
+    });
+
+    res.json({ url: session.url });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Stripe webhook handler
+app.post('/api/stripe/webhook', async (req: Request, res: Response) => {
+  if (!stripe) {
+    return res.status(503).json({ error: 'Stripe is not configured' });
+  }
+
+  const sig = req.headers['stripe-signature'] as string;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  let event: Stripe.Event;
+
+  try {
+    if (webhookSecret) {
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    } else {
+      // For development without webhook secret
+      event = JSON.parse(req.body.toString()) as Stripe.Event;
+      console.warn('Webhook signature verification skipped - STRIPE_WEBHOOK_SECRET not set');
+    }
+  } catch (err: any) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the event
+  switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      console.log('Checkout completed:', {
+        sessionId: session.id,
+        customerId: session.customer,
+        planId: session.metadata?.planId,
+        credits: session.metadata?.credits,
+      });
+      // In a production app, you would:
+      // 1. Find/create the user in your database
+      // 2. Update their plan and credits
+      // 3. Send a confirmation email
+      break;
+    }
+
+    case 'customer.subscription.updated': {
+      const subscription = event.data.object as Stripe.Subscription;
+      console.log('Subscription updated:', {
+        subscriptionId: subscription.id,
+        status: subscription.status,
+      });
+      // Handle plan changes, renewals, etc.
+      break;
+    }
+
+    case 'customer.subscription.deleted': {
+      const subscription = event.data.object as Stripe.Subscription;
+      console.log('Subscription canceled:', {
+        subscriptionId: subscription.id,
+      });
+      // Downgrade user to free plan
+      break;
+    }
+
+    case 'invoice.payment_succeeded': {
+      const invoice = event.data.object as Stripe.Invoice;
+      console.log('Payment succeeded:', {
+        invoiceId: invoice.id,
+        customerId: invoice.customer,
+        amountPaid: invoice.amount_paid,
+      });
+      // Credit monthly renewal
+      break;
+    }
+
+    case 'invoice.payment_failed': {
+      const invoice = event.data.object as Stripe.Invoice;
+      console.log('Payment failed:', {
+        invoiceId: invoice.id,
+        customerId: invoice.customer,
+      });
+      // Notify user, possibly downgrade after grace period
+      break;
+    }
+
+    default:
+      console.log(`Unhandled event type: ${event.type}`);
+  }
+
+  res.json({ received: true });
+});
 
 // Apply error handler
 app.use(errorHandler);

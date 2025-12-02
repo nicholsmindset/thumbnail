@@ -5,7 +5,16 @@ import Header from './Header';
 import ImageUploader from './ImageUploader';
 import Dashboard from './Dashboard';
 import { FileWithPreview, GenerationStatus, HistoryItem, SavedTemplate, TextStyle, UserProfile, CREDIT_COSTS, PlanDetails, QualityLevel, ImageFilter } from '../types';
+import { PLANS } from '../constants';
 import { checkApiKey, selectApiKey, generateThumbnail, generateVideoFromThumbnail, detectTextInImage, analyzeThumbnail, generateYoutubeMetadata, enhancePrompt } from '../services/geminiService';
+
+interface ThumbnailGeneratorProps {
+  initialCheckoutResult?: {
+    success?: boolean;
+    planId?: string;
+    canceled?: boolean;
+  } | null;
+}
 
 const DEFAULT_USER_PROFILE: UserProfile = {
   credits: 10, // Starts with exactly 1 free generation
@@ -19,10 +28,11 @@ const DEFAULT_FILTERS: ImageFilter = {
   saturation: 100
 };
 
-const ThumbnailGenerator: React.FC = () => {
+const ThumbnailGenerator: React.FC<ThumbnailGeneratorProps> = ({ initialCheckoutResult }) => {
   // User Profile & Credits
   const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_USER_PROFILE);
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   const [inspirationImg, setInspirationImg] = useState<FileWithPreview | null>(null);
   const [userImg, setUserImg] = useState<FileWithPreview | null>(null);
@@ -106,6 +116,23 @@ const ThumbnailGenerator: React.FC = () => {
     };
     init();
   }, []);
+
+  // Handle checkout result from Stripe redirect
+  useEffect(() => {
+    if (initialCheckoutResult?.success && initialCheckoutResult.planId) {
+      const plan = PLANS.find((p) => p.id === initialCheckoutResult.planId);
+      if (plan) {
+        setUserProfile((prev) => ({
+          ...prev,
+          plan: plan.id,
+          credits: prev.credits + plan.credits,
+        }));
+        setShowSuccessMessage(true);
+        // Hide success message after 5 seconds
+        setTimeout(() => setShowSuccessMessage(false), 5000);
+      }
+    }
+  }, [initialCheckoutResult]);
 
   // Persist User Profile whenever it changes
   useEffect(() => {
@@ -424,13 +451,26 @@ const ThumbnailGenerator: React.FC = () => {
   return (
     <div className="flex-1 max-w-6xl mx-auto w-full px-4 md:px-6 flex flex-col gap-10 pt-8 pb-20">
       <Header credits={userProfile.credits} onOpenDashboard={() => setIsDashboardOpen(true)} />
-      <Dashboard 
-        isOpen={isDashboardOpen} 
-        onClose={() => setIsDashboardOpen(false)} 
+      <Dashboard
+        isOpen={isDashboardOpen}
+        onClose={() => setIsDashboardOpen(false)}
         userProfile={userProfile}
         onUpgrade={handleUpgrade}
       />
-      
+
+      {/* Subscription Success Message */}
+      {showSuccessMessage && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top duration-300">
+          <div className="bg-green-500/90 backdrop-blur-sm text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3">
+            <CheckCircle2 size={24} />
+            <div>
+              <p className="font-bold">Subscription Activated!</p>
+              <p className="text-sm text-green-100">Your credits have been added to your account.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Welcome / Intro Text */}
       <div className="text-center space-y-3">
             <h2 className="text-3xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-white to-purple-200">

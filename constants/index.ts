@@ -132,6 +132,23 @@ export const API_CONFIG = {
   MAX_RETRIES: 3,
 } as const;
 
+// Stripe Configuration
+export const STRIPE_CONFIG = {
+  PUBLISHABLE_KEY: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '',
+  PRODUCTS: {
+    creator: {
+      productId: 'prod_TWpQPE2VqDDpS4',
+      name: 'Creator',
+      price: 1900, // $19.00 in cents
+    },
+    agency: {
+      productId: 'prod_TWpTYfXYByGs6q',
+      name: 'Agency',
+      price: 4900, // $49.00 in cents
+    },
+  },
+} as const;
+
 // Text Style Options
 export const FONT_OPTIONS = ['Bold Impact', 'Modern Sans', 'Handwritten', 'Retro', 'Minimal'] as const;
 export const EFFECT_OPTIONS = ['None', 'Glow', 'Shadow', 'Outline', '3D'] as const;

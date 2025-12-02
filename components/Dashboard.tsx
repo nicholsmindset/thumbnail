@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { UserProfile, PLANS, PlanDetails, PlanType, CREDIT_COSTS } from '../types';
-import { Check, X, Zap, Crown, LayoutDashboard } from 'lucide-react';
+import { Check, X, Zap, Crown, LayoutDashboard, Loader2, ExternalLink } from 'lucide-react';
+import { redirectToCheckout } from '../services/stripeService';
 
 interface DashboardProps {
   isOpen: boolean;
@@ -10,7 +11,21 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, userProfile, onUpgrade }) => {
+  const [isLoading, setIsLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   if (!isOpen) return null;
+
+  const handleStripeCheckout = async (planId: 'creator' | 'agency') => {
+    setIsLoading(planId);
+    setError(null);
+    try {
+      await redirectToCheckout(planId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start checkout');
+      setIsLoading(null);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -84,6 +99,13 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, userProfile, onU
             </div>
 
 
+            {/* Error Message */}
+            {error && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-300 text-sm">
+                    {error}
+                </div>
+            )}
+
             {/* Pricing Plans */}
             <div>
                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
@@ -92,12 +114,15 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, userProfile, onU
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {PLANS.map((plan) => {
                         const isCurrent = userProfile.plan === plan.id;
+                        const isPaidPlan = plan.id === 'creator' || plan.id === 'agency';
+                        const isLoadingThis = isLoading === plan.id;
+
                         return (
-                            <div 
+                            <div
                                 key={plan.id}
                                 className={`relative flex flex-col p-6 rounded-2xl border transition-all duration-300 ${
-                                    isCurrent 
-                                    ? 'bg-slate-800 border-indigo-500 ring-1 ring-indigo-500 shadow-xl shadow-indigo-500/10' 
+                                    isCurrent
+                                    ? 'bg-slate-800 border-indigo-500 ring-1 ring-indigo-500 shadow-xl shadow-indigo-500/10'
                                     : 'bg-slate-900 border-slate-700 hover:border-slate-500 hover:bg-slate-800'
                                 }`}
                             >
@@ -128,15 +153,36 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, userProfile, onU
                                 </div>
 
                                 <button
-                                    onClick={() => onUpgrade(plan)}
-                                    disabled={isCurrent}
-                                    className={`w-full py-3 rounded-lg font-bold text-sm transition-all ${
+                                    onClick={() => {
+                                        if (isPaidPlan && !isCurrent) {
+                                            handleStripeCheckout(plan.id as 'creator' | 'agency');
+                                        } else if (plan.id === 'free') {
+                                            onUpgrade(plan);
+                                        }
+                                    }}
+                                    disabled={isCurrent || isLoading !== null}
+                                    className={`w-full py-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
                                         isCurrent
                                         ? 'bg-slate-700 text-slate-400 cursor-default'
+                                        : isLoading !== null
+                                        ? 'bg-slate-600 text-slate-300 cursor-wait'
                                         : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/40'
                                     }`}
                                 >
-                                    {isCurrent ? 'Current Plan' : plan.id === 'free' ? 'Downgrade' : 'Upgrade'}
+                                    {isLoadingThis ? (
+                                        <>
+                                            <Loader2 size={16} className="animate-spin" />
+                                            Redirecting to Checkout...
+                                        </>
+                                    ) : isCurrent ? (
+                                        'Current Plan'
+                                    ) : plan.id === 'free' ? (
+                                        'Downgrade'
+                                    ) : (
+                                        <>
+                                            Upgrade <ExternalLink size={14} />
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         );
