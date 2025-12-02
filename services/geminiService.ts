@@ -2,6 +2,15 @@
 import { GoogleGenAI } from "@google/genai";
 import { ThumbnailRequest, QualityLevel, AnalysisResult, YoutubeMetadataResult } from "../types";
 
+// Get API key from environment (Vite exposes VITE_ prefixed vars to browser)
+const getApiKey = (): string => {
+  const key = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.API_KEY : '');
+  if (!key) {
+    throw new Error('Gemini API key not configured. Add VITE_GEMINI_API_KEY to environment variables.');
+  }
+  return key;
+};
+
 // Helper to remove data URL prefix if present for the API call
 const cleanBase64 = (dataUrl: string) => {
   const matches = dataUrl.match(/^data:(.+);base64,(.+)$/);
@@ -32,7 +41,7 @@ export const selectApiKey = async (): Promise<void> => {
 };
 
 export const detectTextInImage = async (base64Image: string): Promise<string[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const image = cleanBase64(base64Image);
 
   try {
@@ -70,7 +79,7 @@ export const detectTextInImage = async (base64Image: string): Promise<string[]> 
 };
 
 export const enhancePrompt = async (originalPrompt: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   
   try {
     const response = await ai.models.generateContent({
@@ -96,7 +105,7 @@ export const enhancePrompt = async (originalPrompt: string): Promise<string> => 
 };
 
 export const analyzeThumbnail = async (base64Image: string): Promise<AnalysisResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const image = cleanBase64(base64Image);
 
   try {
@@ -146,7 +155,7 @@ export const analyzeThumbnail = async (base64Image: string): Promise<AnalysisRes
 };
 
 export const generateYoutubeMetadata = async (base64Image: string, context: string): Promise<YoutubeMetadataResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const image = cleanBase64(base64Image);
 
   try {
@@ -213,7 +222,7 @@ export const generateYoutubeMetadata = async (base64Image: string, context: stri
 
 export const generateThumbnail = async (request: ThumbnailRequest): Promise<string> => {
   // Always create a new instance to ensure the latest key is used
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
   const inspiration = cleanBase64(request.inspirationImage);
   const user = cleanBase64(request.userImage);
@@ -338,7 +347,7 @@ export const generateThumbnail = async (request: ThumbnailRequest): Promise<stri
 };
 
 export const generateVideoFromThumbnail = async (imageBase64: string, prompt: string, sourceAspectRatio: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const image = cleanBase64(imageBase64);
   
   let videoAspectRatio = '16:9';
@@ -370,7 +379,7 @@ export const generateVideoFromThumbnail = async (imageBase64: string, prompt: st
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (!downloadLink) throw new Error("Video generation failed: No URI returned.");
 
-    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    const response = await fetch(`${downloadLink}&key=${getApiKey()}`);
     const blob = await response.blob();
     return URL.createObjectURL(blob);
 
