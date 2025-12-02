@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import ThumbnailGenerator from './components/ThumbnailGenerator';
+import { AuthProvider } from './contexts/AuthContext';
 import { handleCheckoutSuccess, handleCheckoutCanceled } from './services/stripeService';
 import { PLANS } from './constants';
 
 type View = 'landing' | 'app';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   // Simple state-based routing
   const [view, setView] = useState<View>('landing');
   const [checkoutResult, setCheckoutResult] = useState<{
@@ -49,6 +50,14 @@ const App: React.FC = () => {
         <ThumbnailGenerator initialCheckoutResult={checkoutResult} />
       )}
     </>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 

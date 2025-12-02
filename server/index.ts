@@ -3,9 +3,21 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { GoogleGenAI } from '@google/genai';
 import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize Supabase (server-side with service role key)
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey)
+  : null;
+
+if (!supabase) {
+  console.warn('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured - Database features will be disabled');
+}
 
 // Initialize Stripe
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -578,6 +590,75 @@ app.post('/api/stripe/create-portal-session', async (req: Request, res: Response
   }
 });
 
+// Helper: Find user by Stripe customer ID
+async function findUserByStripeCustomer(customerId: string) {
+  if (!supabase) return null;
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('stripe_customer_id', customerId)
+    .single();
+
+  return data;
+}
+
+// Helper: Update user subscription and credits
+async function updateUserSubscription(
+  customerId: string,
+  planId: 'creator' | 'agency',
+  stripeSubscriptionId: string,
+  status: string
+) {
+  if (!supabase) return;
+
+  const user = await findUserByStripeCustomer(customerId);
+  if (!user) {
+    console.error('User not found for Stripe customer:', customerId);
+    return;
+  }
+
+  const credits = STRIPE_PRODUCTS[planId]?.credits || 0;
+
+  // Update profile
+  await supabase
+    .from('profiles')
+    .update({
+      plan: planId,
+      credits: user.credits + credits,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', user.id);
+
+  // Upsert subscription record
+  await supabase
+    .from('subscriptions')
+    .upsert({
+      user_id: user.id,
+      stripe_subscription_id: stripeSubscriptionId,
+      stripe_customer_id: customerId,
+      plan: planId,
+      status: status,
+      updated_at: new Date().toISOString(),
+    }, {
+      onConflict: 'stripe_subscription_id'
+    });
+
+  // Log credit transaction
+  await supabase
+    .from('credit_transactions')
+    .insert({
+      user_id: user.id,
+      amount: credits,
+      balance_after: user.credits + credits,
+      type: 'subscription',
+      description: `${planId} plan subscription`,
+      metadata: { stripe_subscription_id: stripeSubscriptionId },
+    });
+
+  console.log(`Updated user ${user.id} with ${planId} plan and ${credits} credits`);
+}
+
 // Stripe webhook handler
 app.post('/api/stripe/webhook', async (req: Request, res: Response) => {
   if (!stripe) {
@@ -606,56 +687,142 @@ app.post('/api/stripe/webhook', async (req: Request, res: Response) => {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
+      const customerId = session.customer as string;
+      const planId = session.metadata?.planId as 'creator' | 'agency';
+      const subscriptionId = session.subscription as string;
+
       console.log('Checkout completed:', {
         sessionId: session.id,
-        customerId: session.customer,
-        planId: session.metadata?.planId,
-        credits: session.metadata?.credits,
+        customerId,
+        planId,
+        subscriptionId,
       });
-      // In a production app, you would:
-      // 1. Find/create the user in your database
-      // 2. Update their plan and credits
-      // 3. Send a confirmation email
+
+      // Link Stripe customer to user if email matches
+      if (supabase && session.customer_email) {
+        const { data: user } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('email', session.customer_email)
+          .single();
+
+        if (user && !user.stripe_customer_id) {
+          await supabase
+            .from('profiles')
+            .update({ stripe_customer_id: customerId })
+            .eq('id', user.id);
+        }
+      }
+
+      if (planId && subscriptionId) {
+        await updateUserSubscription(customerId, planId, subscriptionId, 'active');
+      }
       break;
     }
 
     case 'customer.subscription.updated': {
       const subscription = event.data.object as Stripe.Subscription;
+      const customerId = subscription.customer as string;
+
       console.log('Subscription updated:', {
         subscriptionId: subscription.id,
         status: subscription.status,
       });
-      // Handle plan changes, renewals, etc.
+
+      if (supabase) {
+        // Update subscription status
+        await supabase
+          .from('subscriptions')
+          .update({
+            status: subscription.status,
+            cancel_at_period_end: subscription.cancel_at_period_end,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('stripe_subscription_id', subscription.id);
+      }
       break;
     }
 
     case 'customer.subscription.deleted': {
       const subscription = event.data.object as Stripe.Subscription;
+      const customerId = subscription.customer as string;
+
       console.log('Subscription canceled:', {
         subscriptionId: subscription.id,
       });
-      // Downgrade user to free plan
+
+      if (supabase) {
+        // Update subscription status
+        await supabase
+          .from('subscriptions')
+          .update({
+            status: 'canceled',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('stripe_subscription_id', subscription.id);
+
+        // Downgrade user to free plan
+        const user = await findUserByStripeCustomer(customerId);
+        if (user) {
+          await supabase
+            .from('profiles')
+            .update({ plan: 'free' })
+            .eq('id', user.id);
+        }
+      }
       break;
     }
 
     case 'invoice.payment_succeeded': {
       const invoice = event.data.object as Stripe.Invoice;
+      const customerId = invoice.customer as string;
+
       console.log('Payment succeeded:', {
         invoiceId: invoice.id,
-        customerId: invoice.customer,
+        customerId,
         amountPaid: invoice.amount_paid,
       });
-      // Credit monthly renewal
+
+      // For recurring payments (not the first one), add monthly credits
+      if (invoice.billing_reason === 'subscription_cycle' && supabase) {
+        const user = await findUserByStripeCustomer(customerId);
+        if (user) {
+          const credits = user.plan === 'agency' ? 5000 : user.plan === 'creator' ? 1000 : 0;
+          if (credits > 0) {
+            await supabase.rpc('add_credits', {
+              p_user_id: user.id,
+              p_amount: credits,
+              p_type: 'subscription',
+              p_description: 'Monthly subscription renewal',
+            });
+            console.log(`Added ${credits} credits to user ${user.id} for monthly renewal`);
+          }
+        }
+      }
       break;
     }
 
     case 'invoice.payment_failed': {
       const invoice = event.data.object as Stripe.Invoice;
+      const customerId = invoice.customer as string;
+
       console.log('Payment failed:', {
         invoiceId: invoice.id,
-        customerId: invoice.customer,
+        customerId,
       });
-      // Notify user, possibly downgrade after grace period
+
+      // Could send notification email or update subscription status
+      if (supabase) {
+        const user = await findUserByStripeCustomer(customerId);
+        if (user) {
+          // Update subscription to past_due
+          await supabase
+            .from('subscriptions')
+            .update({ status: 'past_due' })
+            .eq('user_id', user.id)
+            .eq('status', 'active');
+        }
+      }
       break;
     }
 
