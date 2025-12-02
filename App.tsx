@@ -2,11 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import ThumbnailGenerator from './components/ThumbnailGenerator';
+import EmailCollectionModal from './components/EmailCollectionModal';
 import { AuthProvider } from './contexts/AuthContext';
 import { handleCheckoutSuccess, handleCheckoutCanceled } from './services/stripeService';
 import { PLANS } from './constants';
 
-type View = 'landing' | 'app';
+type View = 'landing' | 'email-collect' | 'app';
 
 const AppContent: React.FC = () => {
   // Simple state-based routing
@@ -37,18 +38,33 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
-  // Pass checkout result to the app for handling credit updates
+  // Show email collection modal when user clicks "Start Free Trial"
   const handleStart = () => {
+    setView('email-collect');
+  };
+
+  // Handle email submission and proceed to app
+  const handleEmailSubmit = (email: string) => {
+    console.log('Trial started for:', email);
     setView('app');
+  };
+
+  // Handle closing the email modal (go back to landing)
+  const handleEmailModalClose = () => {
+    setView('landing');
   };
 
   return (
     <>
-      {view === 'landing' ? (
-        <LandingPage onStart={handleStart} />
-      ) : (
-        <ThumbnailGenerator initialCheckoutResult={checkoutResult} />
-      )}
+      {view === 'landing' && <LandingPage onStart={handleStart} />}
+      {view === 'app' && <ThumbnailGenerator initialCheckoutResult={checkoutResult} />}
+
+      {/* Email Collection Modal */}
+      <EmailCollectionModal
+        isOpen={view === 'email-collect'}
+        onSubmit={handleEmailSubmit}
+        onClose={handleEmailModalClose}
+      />
     </>
   );
 };
