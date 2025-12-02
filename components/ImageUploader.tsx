@@ -1,7 +1,7 @@
-
 import React, { useCallback, useState } from 'react';
 import { Upload, X, Loader2, AlertCircle } from 'lucide-react';
 import { FileWithPreview } from '../types';
+import { FILE_CONFIG } from '../constants';
 
 interface ImageUploaderProps {
   label: string;
@@ -11,9 +11,6 @@ interface ImageUploaderProps {
   id: string;
   isLoading?: boolean;
 }
-
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const ImageUploader: React.FC<ImageUploaderProps> = ({
   label,
@@ -31,13 +28,13 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
       setError(null);
 
       if (file) {
-        if (!ALLOWED_TYPES.includes(file.type)) {
+        if (!FILE_CONFIG.ALLOWED_TYPES.includes(file.type as typeof FILE_CONFIG.ALLOWED_TYPES[number])) {
             setError("Invalid file format. Please upload JPG, PNG, or WebP.");
             return;
         }
 
-        if (file.size > MAX_FILE_SIZE) {
-            setError("File size exceeds 5MB limit.");
+        if (file.size > FILE_CONFIG.MAX_SIZE_BYTES) {
+            setError(`File size exceeds ${FILE_CONFIG.MAX_SIZE_MB}MB limit.`);
             return;
         }
 
@@ -128,7 +125,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
               id={id}
               type="file"
               className="hidden"
-              accept={ALLOWED_TYPES.join(',')}
+              accept={FILE_CONFIG.ALLOWED_TYPES.join(',')}
               onChange={handleFileChange}
             />
           </label>
