@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Dashboard from './Dashboard';
-import { UserProfile, PlanDetails } from '../types';
+import { UserProfile, SubscriptionDetails, PlanType } from '../types';
 
 describe('Dashboard', () => {
   const mockUserProfile: UserProfile = {
@@ -11,11 +11,27 @@ describe('Dashboard', () => {
     totalGenerations: 10,
   };
 
+  const mockSubscription: SubscriptionDetails = {
+    status: 'trialing',
+    currentPlan: 'free',
+    startDate: Date.now(),
+    currentPeriodEnd: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    cancelAtPeriodEnd: false,
+    billingHistory: [],
+  };
+
   const defaultProps = {
     isOpen: true,
     onClose: vi.fn(),
     userProfile: mockUserProfile,
     onUpgrade: vi.fn(),
+    subscription: mockSubscription,
+    onChangePlan: vi.fn(),
+    onCancelSubscription: vi.fn(),
+    onReactivateSubscription: vi.fn(),
+    getNextBillingDate: vi.fn(() => 'January 1, 2025'),
+    canUpgrade: vi.fn((plan: PlanType) => plan !== 'free'),
+    canDowngrade: vi.fn((plan: PlanType) => plan === 'free'),
   };
 
   beforeEach(() => {
@@ -113,7 +129,19 @@ describe('Dashboard', () => {
       totalGenerations: 50,
     };
 
-    render(<Dashboard {...defaultProps} userProfile={creatorProfile} />);
+    const creatorSubscription: SubscriptionDetails = {
+      ...mockSubscription,
+      status: 'active',
+      currentPlan: 'creator',
+    };
+
+    render(
+      <Dashboard
+        {...defaultProps}
+        userProfile={creatorProfile}
+        subscription={creatorSubscription}
+      />
+    );
 
     expect(screen.queryByText('Best Value')).not.toBeInTheDocument();
   });
@@ -131,5 +159,37 @@ describe('Dashboard', () => {
     expect(screen.getByText('1 Free Generation')).toBeInTheDocument();
     expect(screen.getByText('Commercial License')).toBeInTheDocument();
     expect(screen.getByText('Dedicated Support')).toBeInTheDocument();
+  });
+
+  it('should show tabs for Overview and Subscription', () => {
+    render(<Dashboard {...defaultProps} />);
+
+    expect(screen.getByRole('button', { name: /Overview/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Subscription/i })).toBeInTheDocument();
+  });
+
+  it('should show cancelling badge when subscription is set to cancel', () => {
+    const cancellingSubscription: SubscriptionDetails = {
+      ...mockSubscription,
+      status: 'active',
+      currentPlan: 'creator',
+      cancelAtPeriodEnd: true,
+    };
+
+    const creatorProfile: UserProfile = {
+      credits: 500,
+      plan: 'creator',
+      totalGenerations: 50,
+    };
+
+    render(
+      <Dashboard
+        {...defaultProps}
+        userProfile={creatorProfile}
+        subscription={cancellingSubscription}
+      />
+    );
+
+    expect(screen.getByText('Cancelling')).toBeInTheDocument();
   });
 });

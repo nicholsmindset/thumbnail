@@ -4,14 +4,9 @@ import { Sparkles, Download, AlertCircle, RefreshCw, Wand2, Clock, Trash2, Type,
 import Header from './Header';
 import ImageUploader from './ImageUploader';
 import Dashboard from './Dashboard';
-import { FileWithPreview, GenerationStatus, HistoryItem, SavedTemplate, TextStyle, UserProfile, CREDIT_COSTS, PlanDetails, QualityLevel, ImageFilter } from '../types';
+import { FileWithPreview, GenerationStatus, HistoryItem, SavedTemplate, TextStyle, CREDIT_COSTS, PlanDetails, QualityLevel, ImageFilter } from '../types';
 import { checkApiKey, selectApiKey, generateThumbnail, generateVideoFromThumbnail, detectTextInImage, analyzeThumbnail, generateYoutubeMetadata, enhancePrompt } from '../services/geminiService';
-
-const DEFAULT_USER_PROFILE: UserProfile = {
-  credits: 10, // Starts with exactly 1 free generation
-  plan: 'free',
-  totalGenerations: 0
-};
+import { useUserProfile } from '../hooks';
 
 const DEFAULT_FILTERS: ImageFilter = {
   brightness: 100,
@@ -20,8 +15,20 @@ const DEFAULT_FILTERS: ImageFilter = {
 };
 
 const ThumbnailGenerator: React.FC = () => {
-  // User Profile & Credits
-  const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_USER_PROFILE);
+  // User Profile & Credits (using custom hook with localStorage persistence)
+  const {
+    userProfile,
+    setUserProfile,
+    hasCredits,
+    deductCredits: hookDeductCredits,
+    subscription,
+    changePlan,
+    cancelSubscription,
+    reactivateSubscription,
+    getNextBillingDate,
+    canUpgrade,
+    canDowngrade,
+  } = useUserProfile();
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
 
   const [inspirationImg, setInspirationImg] = useState<FileWithPreview | null>(null);
@@ -78,11 +85,7 @@ const ThumbnailGenerator: React.FC = () => {
       const exists = await checkApiKey();
       setHasKey(exists);
 
-      // Load User Profile
-      const savedProfile = localStorage.getItem('thumbgen_user');
-      if (savedProfile) {
-        setUserProfile(JSON.parse(savedProfile));
-      }
+      // Note: User profile is now managed by useUserProfile hook with automatic localStorage persistence
 
       // Load Templates
       const savedTemplates = localStorage.getItem('thumbgen_templates');
@@ -106,11 +109,6 @@ const ThumbnailGenerator: React.FC = () => {
     };
     init();
   }, []);
-
-  // Persist User Profile whenever it changes
-  useEffect(() => {
-    localStorage.setItem('thumbgen_user', JSON.stringify(userProfile));
-  }, [userProfile]);
 
   // Persist History whenever it changes
   useEffect(() => {
@@ -163,16 +161,9 @@ const ThumbnailGenerator: React.FC = () => {
   };
 
   const handleUpgrade = (plan: PlanDetails) => {
-    // Simulate Purchase
-    if (confirm(`Confirm upgrade to ${plan.name} for ${plan.price}? This will add ${plan.credits} credits.`)) {
-        setUserProfile(prev => ({
-            ...prev,
-            plan: plan.id,
-            credits: prev.credits + plan.credits
-        }));
-        alert("Purchase successful! Credits added.");
-        setIsDashboardOpen(false);
-    }
+    // Use the changePlan function from the hook which handles subscription updates
+    changePlan(plan.id);
+    setIsDashboardOpen(false);
   };
 
   const getCurrentCost = (): number => {
@@ -185,13 +176,13 @@ const ThumbnailGenerator: React.FC = () => {
   };
 
   const deductCredits = (amount: number): boolean => {
-      if (userProfile.credits < amount) {
+      if (!hasCredits(amount)) {
           setIsDashboardOpen(true);
           return false;
       }
+      hookDeductCredits(amount);
       setUserProfile(prev => ({
           ...prev,
-          credits: prev.credits - amount,
           totalGenerations: prev.totalGenerations + 1
       }));
       return true;
@@ -424,11 +415,18 @@ const ThumbnailGenerator: React.FC = () => {
   return (
     <div className="flex-1 max-w-6xl mx-auto w-full px-4 md:px-6 flex flex-col gap-10 pt-8 pb-20">
       <Header credits={userProfile.credits} onOpenDashboard={() => setIsDashboardOpen(true)} />
-      <Dashboard 
-        isOpen={isDashboardOpen} 
-        onClose={() => setIsDashboardOpen(false)} 
+      <Dashboard
+        isOpen={isDashboardOpen}
+        onClose={() => setIsDashboardOpen(false)}
         userProfile={userProfile}
         onUpgrade={handleUpgrade}
+        subscription={subscription}
+        onChangePlan={changePlan}
+        onCancelSubscription={cancelSubscription}
+        onReactivateSubscription={reactivateSubscription}
+        getNextBillingDate={getNextBillingDate}
+        canUpgrade={canUpgrade}
+        canDowngrade={canDowngrade}
       />
       
       {/* Welcome / Intro Text */}

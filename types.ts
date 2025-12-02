@@ -1,3 +1,9 @@
+// Import types from constants for internal use
+import type {
+  PlanType as PlanTypeImport,
+  QualityLevel as QualityLevelImport,
+} from './constants';
+
 // Re-export constants for backwards compatibility
 export {
   CREDIT_COSTS,
@@ -5,6 +11,11 @@ export {
   type PlanType,
   type PlanDetails,
   type QualityLevel,
+  type SubscriptionStatus,
+  type SubscriptionDetails,
+  type BillingHistoryItem,
+  SUBSCRIPTION_STATUS,
+  DEFAULT_SUBSCRIPTION,
 } from './constants';
 
 export interface FileWithPreview {
@@ -39,7 +50,7 @@ export interface ThumbnailRequest {
   textReplacement?: string;
   textStyle?: TextStyle;
   aspectRatio: string;
-  quality: QualityLevel;
+  quality: QualityLevelImport;
 }
 
 export interface AnalysisResult {
@@ -64,7 +75,7 @@ export interface HistoryItem {
   timestamp: number;
   aspectRatio: string;
   videoUrl?: string;
-  quality?: QualityLevel;
+  quality?: QualityLevelImport;
   analysis?: AnalysisResult;
   metadata?: YoutubeMetadataResult;
   filters?: ImageFilter;
@@ -78,6 +89,6 @@ export interface SavedTemplate {
 
 export interface UserProfile {
   credits: number;
-  plan: PlanType;
+  plan: PlanTypeImport;
   totalGenerations: number;
 }
