@@ -6,7 +6,7 @@
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { STRIPE_CONFIG } from '../constants';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Initialize Stripe
 let stripePromise: Promise<Stripe | null> | null = null;
