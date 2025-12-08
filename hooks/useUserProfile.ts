@@ -1,13 +1,7 @@
 import { useCallback } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 import { UserProfile, PlanType, QualityLevel, CREDIT_COSTS } from '../types';
-import { STORAGE_KEYS } from '../constants';
-
-const DEFAULT_USER_PROFILE: UserProfile = {
-  credits: 10,
-  plan: 'free',
-  totalGenerations: 0,
-};
+import { STORAGE_KEYS, DEFAULT_USER_PROFILE } from '../constants';
 
 /**
  * Calculate credit cost based on quality level
