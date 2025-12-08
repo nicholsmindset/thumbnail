@@ -5,7 +5,6 @@ import ThumbnailGenerator from './components/ThumbnailGenerator';
 import EmailCollectionModal from './components/EmailCollectionModal';
 import { AuthProvider } from './contexts/AuthContext';
 import { handleCheckoutSuccess, handleCheckoutCanceled } from './services/stripeService';
-import { PLANS } from './constants';
 
 type View = 'landing' | 'email-collect' | 'app';
 
@@ -22,8 +21,6 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     const successResult = handleCheckoutSuccess();
     if (successResult.success && successResult.planId) {
-      // Find the plan to get credits
-      const plan = PLANS.find((p) => p.id === successResult.planId);
       setCheckoutResult({
         success: true,
         planId: successResult.planId,
@@ -44,8 +41,8 @@ const AppContent: React.FC = () => {
   };
 
   // Handle email submission and proceed to app
-  const handleEmailSubmit = (email: string) => {
-    console.log('Trial started for:', email);
+  const handleEmailSubmit = (_email: string) => {
+    // Email is already stored in localStorage by EmailCollectionModal
     setView('app');
   };
 

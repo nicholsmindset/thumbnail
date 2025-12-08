@@ -678,9 +678,10 @@ app.post('/api/stripe/webhook', async (req: Request, res: Response) => {
       event = JSON.parse(req.body.toString()) as Stripe.Event;
       console.warn('Webhook signature verification skipped - STRIPE_WEBHOOK_SECRET not set');
     }
-  } catch (err: any) {
-    console.error('Webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    console.error('Webhook signature verification failed:', errorMessage);
+    return res.status(400).send(`Webhook Error: ${errorMessage}`);
   }
 
   // Handle the event

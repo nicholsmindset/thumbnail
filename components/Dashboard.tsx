@@ -42,8 +42,9 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, userProfile, onU
                     <p className="text-slate-400 text-sm">Manage your plan and credits</p>
                 </div>
             </div>
-            <button 
+            <button
                 onClick={onClose}
+                aria-label="Close dashboard"
                 className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white"
             >
                 <X size={24} />

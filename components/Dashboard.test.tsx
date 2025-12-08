@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Dashboard from './Dashboard';
-import { UserProfile, PlanDetails } from '../types';
+import { UserProfile } from '../types';
+
+// Mock the stripe service to prevent actual API calls
+vi.mock('../services/stripeService', () => ({
+  redirectToCheckout: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe('Dashboard', () => {
   const mockUserProfile: UserProfile = {
@@ -59,8 +64,8 @@ describe('Dashboard', () => {
     const onClose = vi.fn();
     render(<Dashboard {...defaultProps} onClose={onClose} />);
 
-    // Find the close button (X icon button)
-    const closeButton = screen.getByRole('button', { name: '' });
+    // Find the close button by its aria-label
+    const closeButton = screen.getByRole('button', { name: /close dashboard/i });
     await userEvent.click(closeButton);
 
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -82,22 +87,19 @@ describe('Dashboard', () => {
     expect(currentPlanButtons.length).toBeGreaterThan(0);
   });
 
-  it('should call onUpgrade when upgrade button is clicked', async () => {
-    const onUpgrade = vi.fn();
-    render(<Dashboard {...defaultProps} onUpgrade={onUpgrade} />);
+  it('should initiate Stripe checkout when upgrade button is clicked for paid plans', async () => {
+    const { redirectToCheckout } = await import('../services/stripeService');
+    render(<Dashboard {...defaultProps} />);
 
-    // Find and click the Creator upgrade button
+    // Find and click the Creator upgrade button (first upgrade button)
     const upgradeButtons = screen.getAllByRole('button', { name: /Upgrade/i });
     await userEvent.click(upgradeButtons[0]);
 
-    expect(onUpgrade).toHaveBeenCalledTimes(1);
-    expect(onUpgrade).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: expect.any(String),
-        name: expect.any(String),
-        credits: expect.any(Number),
-      })
-    );
+    // Wait for async operation
+    await vi.waitFor(() => {
+      expect(redirectToCheckout).toHaveBeenCalledTimes(1);
+    });
+    expect(redirectToCheckout).toHaveBeenCalledWith('creator');
   });
 
   it('should show "Best Value" badge on Creator plan for non-creator users', () => {

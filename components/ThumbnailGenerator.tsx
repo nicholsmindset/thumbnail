@@ -5,7 +5,7 @@ import Header from './Header';
 import ImageUploader from './ImageUploader';
 import Dashboard from './Dashboard';
 import { FileWithPreview, GenerationStatus, HistoryItem, SavedTemplate, TextStyle, UserProfile, CREDIT_COSTS, PlanDetails, QualityLevel, ImageFilter } from '../types';
-import { PLANS } from '../constants';
+import { PLANS, DEFAULT_FILTERS } from '../constants';
 import { checkApiKey, selectApiKey, generateThumbnail, generateVideoFromThumbnail, detectTextInImage, analyzeThumbnail, generateYoutubeMetadata, enhancePrompt } from '../services/geminiService';
 
 interface ThumbnailGeneratorProps {
@@ -20,12 +20,6 @@ const DEFAULT_USER_PROFILE: UserProfile = {
   credits: 10, // Starts with exactly 1 free generation
   plan: 'free',
   totalGenerations: 0
-};
-
-const DEFAULT_FILTERS: ImageFilter = {
-  brightness: 100,
-  contrast: 100,
-  saturation: 100
 };
 
 const ThumbnailGenerator: React.FC<ThumbnailGeneratorProps> = ({ initialCheckoutResult }) => {
@@ -307,13 +301,13 @@ const ThumbnailGenerator: React.FC<ThumbnailGeneratorProps> = ({ initialCheckout
       setSelectedId(newItem.id);
       setStatus(GenerationStatus.SUCCESS);
       setActiveTab('mockup'); // Switch to preview tab on new generation
-    } catch (error: any) {
-      console.error(error);
+    } catch (error: unknown) {
       setStatus(GenerationStatus.ERROR);
       // Refund credits on failure
       setUserProfile(prev => ({ ...prev, credits: prev.credits + cost, totalGenerations: prev.totalGenerations - 1 }));
 
-      if (error.message && error.message.includes("Requested entity was not found")) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes("Requested entity was not found")) {
           setHasKey(false);
           setErrorMsg("API Key invalid or expired. Please reconnect.");
       } else {

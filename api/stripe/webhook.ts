@@ -16,8 +16,8 @@ const STRIPE_PRODUCTS = {
 // Disable body parsing for webhook signature verification
 export const config = { api: { bodyParser: false } };
 
-async function buffer(readable: any) {
-  const chunks = [];
+async function buffer(readable: AsyncIterable<Buffer | string>): Promise<Buffer> {
+  const chunks: Buffer[] = [];
   for await (const chunk of readable) {
     chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
   }
@@ -34,15 +34,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let event: Stripe.Event;
 
+  // Webhook signature verification is mandatory in production
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    console.error('STRIPE_WEBHOOK_SECRET is not configured');
+    return res.status(500).json({ error: 'Webhook secret not configured' });
+  }
+
+  if (!sig) {
+    return res.status(400).json({ error: 'Missing stripe-signature header' });
+  }
+
   try {
-    if (process.env.STRIPE_WEBHOOK_SECRET) {
-      event = stripe.webhooks.constructEvent(buf, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    } else {
-      event = JSON.parse(buf.toString()) as Stripe.Event;
-    }
-  } catch (err: any) {
-    console.error('Webhook error:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    event = stripe.webhooks.constructEvent(buf, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    console.error('Webhook signature verification failed:', errorMessage);
+    return res.status(400).send(`Webhook Error: ${errorMessage}`);
   }
 
   switch (event.type) {
