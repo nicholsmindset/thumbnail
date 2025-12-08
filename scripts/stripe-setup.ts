@@ -82,14 +82,16 @@ async function main() {
 
     console.log('\n✅ Stripe configuration check complete!');
 
-  } catch (error: any) {
-    if (error.code === 'resource_missing') {
-      console.error(`❌ Product not found: ${error.message}`);
+  } catch (error: unknown) {
+    const stripeError = error as { code?: string; type?: string; message?: string };
+    if (stripeError.code === 'resource_missing') {
+      console.error(`❌ Product not found: ${stripeError.message}`);
       console.error('   Make sure the product IDs are correct in your Stripe Dashboard.');
-    } else if (error.code === 'api_key_expired' || error.type === 'StripeAuthenticationError') {
+    } else if (stripeError.code === 'api_key_expired' || stripeError.type === 'StripeAuthenticationError') {
       console.error('❌ Invalid API key. Please check your STRIPE_SECRET_KEY.');
     } else {
-      console.error('❌ Error:', error.message);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Error:', errorMessage);
     }
     process.exit(1);
   }

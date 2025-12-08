@@ -42,7 +42,7 @@ const AppContent: React.FC = () => {
 
   // Handle email submission and proceed to app
   const handleEmailSubmit = (_email: string) => {
-    // Email is stored in EmailCollectionModal via localStorage
+    // Email is already stored in localStorage by EmailCollectionModal
     setView('app');
   };
 

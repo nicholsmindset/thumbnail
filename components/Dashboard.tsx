@@ -50,9 +50,9 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, userProfile, onU
             </div>
             <button
                 onClick={onClose}
-                className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900"
                 aria-label="Close dashboard"
                 type="button"
+                className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900"
             >
                 <X size={24} aria-hidden="true" />
             </button>

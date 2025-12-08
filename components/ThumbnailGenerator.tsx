@@ -295,13 +295,13 @@ const ThumbnailGenerator: React.FC<ThumbnailGeneratorProps> = ({ initialCheckout
       setSelectedId(newItem.id);
       setStatus(GenerationStatus.SUCCESS);
       setActiveTab('mockup'); // Switch to preview tab on new generation
-    } catch (error: any) {
-      console.error(error);
+    } catch (error: unknown) {
       setStatus(GenerationStatus.ERROR);
       // Refund credits on failure
       setUserProfile(prev => ({ ...prev, credits: prev.credits + cost, totalGenerations: prev.totalGenerations - 1 }));
 
-      if (error.message && error.message.includes("Requested entity was not found")) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes("Requested entity was not found")) {
           setHasKey(false);
           setErrorMsg("API Key invalid or expired. Please reconnect.");
       } else {

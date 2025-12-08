@@ -47,11 +47,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(buf, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error('Webhook signature verification failed:', message);
-    return res.status(400).json({ error: `Webhook Error: ${message}` });
+    event = stripe.webhooks.constructEvent(buf, sig as string, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    console.error('Webhook signature verification failed:', errorMessage);
+    return res.status(400).json({ error: `Webhook Error: ${errorMessage}` });
   }
 
   switch (event.type) {
