@@ -1,12 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { Readable } from 'stream';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
-const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-  : null;
+const supabase =
+  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    : null;
 
 const STRIPE_PRODUCTS = {
   creator: { productId: process.env.STRIPE_CREATOR_PRODUCT_ID || 'prod_TWpQPE2VqDDpS4', credits: 1000 },
@@ -16,8 +18,8 @@ const STRIPE_PRODUCTS = {
 // Disable body parsing for webhook signature verification
 export const config = { api: { bodyParser: false } };
 
-async function buffer(readable: any) {
-  const chunks = [];
+async function buffer(readable: Readable): Promise<Buffer> {
+  const chunks: Buffer[] = [];
   for await (const chunk of readable) {
     chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
   }
@@ -29,20 +31,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const buf = await buffer(req);
-  const sig = req.headers['stripe-signature'] as string;
+  // SECURITY: Require webhook secret in production
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    console.error('STRIPE_WEBHOOK_SECRET is not configured');
+    return res.status(500).json({ error: 'Webhook not configured' });
+  }
+
+  const buf = await buffer(req as unknown as Readable);
+  const sig = req.headers['stripe-signature'];
+
+  if (!sig) {
+    return res.status(400).json({ error: 'Missing stripe-signature header' });
+  }
 
   let event: Stripe.Event;
 
   try {
-    if (process.env.STRIPE_WEBHOOK_SECRET) {
-      event = stripe.webhooks.constructEvent(buf, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    } else {
-      event = JSON.parse(buf.toString()) as Stripe.Event;
-    }
-  } catch (err: any) {
-    console.error('Webhook error:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    event = stripe.webhooks.constructEvent(buf, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('Webhook signature verification failed:', message);
+    return res.status(400).json({ error: `Webhook Error: ${message}` });
   }
 
   switch (event.type) {

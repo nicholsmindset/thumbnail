@@ -28,25 +28,33 @@ const Dashboard: React.FC<DashboardProps> = ({ isOpen, onClose, userProfile, onU
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dashboard-title"
+      aria-describedby="dashboard-description"
+    >
       <div className="bg-[#0f172a] border border-slate-700 w-full max-w-5xl h-[90vh] overflow-y-auto rounded-3xl shadow-2xl flex flex-col relative">
-        
+
         {/* Header */}
         <div className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur border-b border-slate-800 p-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
-                <div className="p-3 bg-indigo-500/20 rounded-xl text-indigo-400">
+                <div className="p-3 bg-indigo-500/20 rounded-xl text-indigo-400" aria-hidden="true">
                     <LayoutDashboard size={24} />
                 </div>
                 <div>
-                    <h2 className="text-2xl font-bold text-white">Dashboard</h2>
-                    <p className="text-slate-400 text-sm">Manage your plan and credits</p>
+                    <h2 id="dashboard-title" className="text-2xl font-bold text-white">Dashboard</h2>
+                    <p id="dashboard-description" className="text-slate-400 text-sm">Manage your plan and credits</p>
                 </div>
             </div>
-            <button 
+            <button
                 onClick={onClose}
-                className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white"
+                className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+                aria-label="Close dashboard"
+                type="button"
             >
-                <X size={24} />
+                <X size={24} aria-hidden="true" />
             </button>
         </div>
 
