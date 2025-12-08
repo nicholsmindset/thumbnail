@@ -57,8 +57,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     res.json({ sessionId: session.id, url: session.url });
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Checkout error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: message });
   }
 }

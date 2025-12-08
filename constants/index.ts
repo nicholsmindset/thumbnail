@@ -120,6 +120,13 @@ export const STORAGE_KEYS = {
   TEMPLATES: 'thumbgen_templates',
 } as const;
 
+// Default User Profile
+export const DEFAULT_USER_PROFILE = {
+  credits: 10,
+  plan: 'free' as const,
+  totalGenerations: 0,
+} as const;
+
 // UI Constants
 export const UI = {
   MAX_HISTORY_ITEMS: 50,

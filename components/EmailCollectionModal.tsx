@@ -50,8 +50,7 @@ const EmailCollectionModal: React.FC<EmailCollectionModalProps> = ({ isOpen, onS
           created_at: new Date().toISOString(),
         });
       } catch {
-        // Table might not exist, continue anyway
-        console.log('Leads table not available, storing email locally');
+        // Table might not exist, continue anyway - email stored locally as fallback
       }
 
       // Store in localStorage as backup
@@ -60,7 +59,7 @@ const EmailCollectionModal: React.FC<EmailCollectionModalProps> = ({ isOpen, onS
 
       // Call the onSubmit callback to proceed
       onSubmit(email);
-    } catch (err) {
+    } catch {
       setError('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
@@ -68,15 +67,21 @@ const EmailCollectionModal: React.FC<EmailCollectionModalProps> = ({ isOpen, onS
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="email-modal-title"
+      aria-describedby="email-modal-description"
+    >
       <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="relative p-6 border-b border-slate-800 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-600/20 rounded-full mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-600/20 rounded-full mb-4" aria-hidden="true">
             <Sparkles className="w-8 h-8 text-indigo-400" />
           </div>
-          <h2 className="text-2xl font-bold text-white">Start Your Free Trial</h2>
-          <p className="text-slate-400 text-sm mt-2">
+          <h2 id="email-modal-title" className="text-2xl font-bold text-white">Start Your Free Trial</h2>
+          <p id="email-modal-description" className="text-slate-400 text-sm mt-2">
             Enter your email to get instant access to our AI thumbnail generator
           </p>
         </div>

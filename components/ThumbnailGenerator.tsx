@@ -5,7 +5,7 @@ import Header from './Header';
 import ImageUploader from './ImageUploader';
 import Dashboard from './Dashboard';
 import { FileWithPreview, GenerationStatus, HistoryItem, SavedTemplate, TextStyle, UserProfile, CREDIT_COSTS, PlanDetails, QualityLevel, ImageFilter } from '../types';
-import { PLANS } from '../constants';
+import { PLANS, DEFAULT_FILTERS, STORAGE_KEYS, DEFAULT_USER_PROFILE } from '../constants';
 import { checkApiKey, selectApiKey, generateThumbnail, generateVideoFromThumbnail, detectTextInImage, analyzeThumbnail, generateYoutubeMetadata, enhancePrompt } from '../services/geminiService';
 
 interface ThumbnailGeneratorProps {
@@ -15,18 +15,6 @@ interface ThumbnailGeneratorProps {
     canceled?: boolean;
   } | null;
 }
-
-const DEFAULT_USER_PROFILE: UserProfile = {
-  credits: 10, // Starts with exactly 1 free generation
-  plan: 'free',
-  totalGenerations: 0
-};
-
-const DEFAULT_FILTERS: ImageFilter = {
-  brightness: 100,
-  contrast: 100,
-  saturation: 100
-};
 
 const ThumbnailGenerator: React.FC<ThumbnailGeneratorProps> = ({ initialCheckoutResult }) => {
   // User Profile & Credits
